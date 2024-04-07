@@ -11,105 +11,73 @@ liquidity = {
     ("tokenD", "tokenE"): (60, 25),
 }
 
-import math
+def perm(start, path, paths):
+    if start == len(path):
+        paths.append(path.copy())
+        return
+    for i in range(start, len(path)):
+        path[start], path[i] = path[i], path[start]
+        perm(start + 1, path, paths)
+        path[start], path[i] = path[i], path[start]
 
 
-def contruct_graph():
-    graph = {}
-
-    for pair in liquidity:
-        _from, to = pair[0], pair[1]
-        if _from not in graph:
-            graph[_from] = {}
-        graph[_from][to] = -math.log(float(liquidity[pair][1]) / float(liquidity[pair][0]))
-        if to not in graph:
-            graph[to] = {}
-        graph[to][_from] = -math.log(float(liquidity[pair][0]) / float(liquidity[pair][1]))
-    return graph
-
-
-# For each node prepare the destination and predecessor
-def initialize(graph, source):
-    dist = {}  # Stands for destination
-    pred = {}  # Stands for predecessor
-    for node in graph:
-        dist[node] = float('Inf')  # We start admiting that the rest of nodes are very very far
-        pred[node] = None
-    dist[source] = 0  # For the source
-    return dist, pred
-
-
-def relax(u, v, graph, dist, pred):
-    # If the distance between node u and node v is lower than the one I have now
-    if dist[u] + graph[u][v] < dist[v]:
-        # Record this lower distance
-        dist[v] = dist[u] + graph[u][v]
-        pred[v] = u
-
-
-def backtrace_negative_loop(pred, source):
-    arbitrageLoop = [source]
-    next_node = source
-    while True:
-        next_node = pred[next_node]
-        if next_node not in arbitrageLoop:
-            arbitrageLoop.append(next_node)
+def comb(n, k, start, path, paths):
+    for i in range(start, n - k + 1):
+        path.append(i)
+        if k == 1:
+            perm(0, path, paths)
         else:
-            # A loop is found
-            arbitrageLoop.append(next_node)
-            arbitrageLoop = arbitrageLoop[arbitrageLoop.index(next_node):]
-            arbitrageLoop.reverse()
-            return arbitrageLoop
+            comb(n, k - 1, i + 1, path, paths)
+        path.pop()
+            
 
-def bellman_ford(graph, source):
-    dist, pred = initialize(graph, source)
-    for i in range(len(graph) - 1):  # Relax each edge |V| - 1 times
-        for u in graph:
-            for v in graph[u]:  # For each neighbour of u
-                relax(u, v, graph, dist, pred)  # relax
+# All possible paths in [0, n]
+def generate_paths(n):
+    path, paths = [], []
+    for k in range(1, n + 1):
+        comb(n, k, 0, path, paths)
+    return paths
 
-    # Check for negative-weight cycles
-    for u in graph:
-        for v in graph[u]:
-            if dist[v] < dist[u] + graph[u][v]:
-                return backtrace_negative_loop(pred, source)
-    # Return the negative-weight cycle if found, else return None
-    return None
+
+# Deposit y get x
+def swap(tin, tout, amount_in):
+    x, y = 0, 0
+    if (tin, tout) in liquidity:
+        pair = (tin, tout)
+        x, y = liquidity[pair][1], liquidity[pair][0]
+    else:
+        pair = (tout, tin)
+        x, y = liquidity[pair][0], liquidity[pair][1]
+    
+    amount_out = (0.997 * x * amount_in) / (y + 0.997 * amount_in)
+    return amount_out
+
+
+def arbitrage(startToken, balance, path):
+    for i in range(len(path) - 1):
+        tin, tout = path[i], path[i + 1]
+        balance = swap(tin, tout, balance)
+    return balance
 
 
 if __name__ == '__main__':
-    startToken = 'tokenB'
-    graph = contruct_graph()
-    paths = {}
-    for src in graph:
-        path = bellman_ford(graph, src)
-        if path is None:
-            break
-        if path[0] != src:
-            path.insert(0, src)
-        if path[-1] != src:
-            path.append(src)
-        paths[src] = path
-
-
-    if startToken in paths:
-        path = paths[startToken]
-        balance = 5
-        #print(f"Starting with {balance} in {path[0]} ")
-        for i, value in enumerate(path):
-            if i + 1 < len(path):
-                _from = path[i]
-                to = path[i + 1]
-                rate = math.exp(-graph[_from][to])
-                balance *= rate
-                #print(f"{_from} to {to} at {rate} = {balance}")
+    startToken = 'tokenB'    
+    tokens = ['tokenA', 'tokenB', 'tokenC', 'tokenD', 'tokenE']
+    tokens.remove(startToken)
+    paths = generate_paths(len(tokens))
+    balance = 5
+    for p in paths:
+        path = [tokens[p[i]] for i in range(len(p))]
+        path.insert(0, startToken)
+        path.append(startToken)
+        new_balance = arbitrage(startToken, balance, path)
+        
+        if new_balance < 20:
+            continue
         
         # Print the result
         str = f'path: {path[0]}'
         for i in range(1, len(path)):
             str += f'-> {path[i]}'
-        str += f", {startToken} balance={balance}"
+        str += f", {startToken} balance={new_balance}"
         print(str)
-    else:
-        print("No opportunity here :(")
-        
