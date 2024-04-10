@@ -65,19 +65,23 @@ if __name__ == '__main__':
     tokens = ['tokenA', 'tokenB', 'tokenC', 'tokenD', 'tokenE']
     tokens.remove(startToken)
     paths = generate_paths(len(tokens))
+    
     balance = 5
+    best_path = None
+    best_amount_out = 0
     for p in paths:
         path = [tokens[p[i]] for i in range(len(p))]
         path.insert(0, startToken)
         path.append(startToken)
         new_balance = arbitrage(startToken, balance, path)
         
-        if new_balance < 20:
-            continue
+        if new_balance > best_amount_out:
+            best_path = path
+            best_amount_out = new_balance
         
-        # Print the result
-        str = f'path: {path[0]}'
-        for i in range(1, len(path)):
-            str += f'-> {path[i]}'
-        str += f", {startToken} balance={new_balance}"
-        print(str)
+    # Print the result
+    str = f'path: {best_path[0]}'
+    for i in range(1, len(best_path)):
+        str += f'-> {best_path[i]}'
+    str += f", {startToken} balance={best_amount_out}"
+    print(str)
